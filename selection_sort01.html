@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>選択ソート 可視化ツール</title>
+    <!-- Tailwind CSSを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Interフォントを読み込み -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Noto Sans JPをInterより優先的に適用 */
+        body {
+            font-family: 'Noto Sans JP', 'Inter', sans-serif;
+        }
+        /* カードのスタイル */
+        .card {
+            width: 5rem; /* 80px */
+            height: 7rem; /* 112px */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.25rem; /* 36px */
+            font-weight: 700;
+            border-width: 2px;
+            border-radius: 0.5rem; /* 8px */
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: all 0.3s ease-in-out;
+            background-color: white;
+        }
+        /* 説明文の改行を有効にする */
+        #explanation {
+            white-space: pre-wrap;
+            min-height: 4.5rem; /* 3行分程度の高さを確保 */
+        }
+        
+        /* 状態ごとのスタイル */
+        .card.sorted {
+            /* ソート済み */
+            background-color: #d1fae5; /* green-100 */
+            border-color: #6ee7b7; /* green-300 */
+            color: #065f46; /* green-800 */
+        }
+        .card.target {
+            /* 現在の交換対象（i番目） */
+            border-color: #60a5fa; /* blue-400 */
+            transform: scale(1.05);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        /* .card.min スタイルは不要になりました */
+        /*
+        .card.min {
+            border-color: #c084fc; 
+            transform: scale(1.05);
+        }
+        */
+        .card.checking {
+            /* 現在調査中の要素（j番目） */
+            border-color: #facc15; /* yellow-400 */
+            background-color: #fef9c3; /* yellow-50 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl max-w-2xl w-full">
+        
+        <h1 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-6">
+            選択ソート 可視化ツール
+        </h1>
+
+        <!-- カードを表示するコンテナ -->
+        <div id="card-container" class="flex justify-around items-center my-8 sm:my-12 px-2">
+            <!-- JavaScriptでカードがここに追加されます -->
+        </div>
+
+        <!-- コントロールボタン -->
+        <div class="flex justify-center gap-4 mb-6">
+            <button id="reset-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all">
+                リセット
+            </button>
+            <button id="next-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all">
+                次へ
+            </button>
+        </div>
+
+        <!-- 説明文 -->
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <h2 class="font-bold text-lg text-gray-700 mb-2">現在のステップ</h2>
+            <p id="explanation" class="text-gray-600 text-sm sm:text-base"></p>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const cardContainer = document.getElementById('card-container');
+            const nextButton = document.getElementById('next-button');
+            const resetButton = document.getElementById('reset-button');
+            const explanation = document.getElementById('explanation');
+
+            let cards = [];
+            let i = 0; // 外側ループのインデックス（ソート済みの次の位置）
+            let j = 1; // 内側ループのインデックス（最小値を探すため）
+            // minIndex と isFinding は不要になりました
+            // let minIndex = 0; 
+            // let isFinding = true; 
+            let isDone = false; // ソートが完了したか
+            
+            const INITIAL_CARDS = [5, 2, 4, 1, 3]; // 固定の初期配列
+
+            // 初期化・リセット処理
+            function initialize() {
+                cards = [...INITIAL_CARDS];
+                i = 0;
+                j = i + 1; // jはiの次からスタート
+                // minIndex = 0; // 不要
+                // isFinding = true; // 不要
+                isDone = false;
+                nextButton.disabled = false;
+                updateExplanation("初期状態です。「次へ」を押してソートを開始します。\n[青枠]が比較の基準位置、[黄枠]が比較対象です。");
+                renderCards();
+            }
+
+            // カードを描画する処理
+            function renderCards() {
+                cardContainer.innerHTML = ''; // コンテナをクリア
+                cards.forEach((value, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.textContent = value;
+
+                    // 状態に応じてスタイルを適用
+                    if (isDone || index < i) {
+                        // ソート完了
+                        card.classList.add('sorted');
+                    } else if (!isDone) {
+                        if (index === i) {
+                            card.classList.add('target'); // 交換対象
+                        }
+                        // minIndexのハイライトは不要
+                        // if (index === minIndex) {
+                        //     card.classList.add('min'); // 最小値候補
+                        // }
+                        if (index === j) { // jは範囲外になることがあるため、isFindingチェックは削除
+                            card.classList.add('checking'); // 調査中
+                        }
+                    }
+                    cardContainer.appendChild(card);
+                });
+            }
+
+            // 説明文を更新する処理
+            function updateExplanation(text) {
+                explanation.textContent = text;
+            }
+
+            // 「次へ」ボタンが押されたときの処理
+            function nextStep() {
+                if (isDone) return;
+
+                // ソートが完了したかチェック (iが最後の手前まで行ったら)
+                if (i >= cards.length - 1) {
+                    isDone = true;
+                    nextButton.disabled = true;
+                    updateExplanation("ソートが完了しました！");
+                    renderCards(); // 最後の要素もソート済みとして表示
+                    return;
+                }
+
+                // --- 内側ループ（j）の処理 ---
+                if (j < cards.length) {
+                    const old_i_val = cards[i];
+                    const old_j_val = cards[j];
+
+                    updateExplanation(
+                        `[${i + 1}番目]の値(${old_i_val}) と [${j + 1}番目]の値(${old_j_val}) を比較します。`
+                    );
+
+                    if (cards[j] < cards[i]) {
+                        // 比較対象(j)が現在位置(i)より小さければ、即交換
+                        [cards[i], cards[j]] = [cards[j], cards[i]]; // 値を交換
+                        
+                        // 交換したので、説明文を更新
+                        updateExplanation(
+                            `[${j + 1}番目](${old_j_val}) < [${i + 1}番目](${old_i_val}) だったため、\n`+
+                            `値を交換しました。 [${i + 1}番目]は ${cards[i]} になりました。`
+                        );
+                        
+                    } else {
+                        // 交換不要
+                        updateExplanation(
+                            `[${j + 1}番目](${old_j_val}) >= [${i + 1}番目](${old_i_val}) のため、\n`+
+                            `交換は不要です。`
+                        );
+                    }
+                    j++; // 次の比較対象へ
+                } else {
+                    // --- 内側ループ(j)が終了 ---
+                    // [i]番目の値が確定
+                    updateExplanation(
+                        `[${i + 1}番目]の値(${cards[i]})が確定しました。\n` +
+                        `次の位置[${i + 2}番目]の比較を開始します。`
+                    );
+                    i++; // 外側ループを1つ進める
+                    j = i + 1; // jをリセット
+
+                    // iを進めた結果、ソートが完了したかチェック
+                    if (i >= cards.length - 1) {
+                        isDone = true;
+                        nextButton.disabled = true;
+                        updateExplanation("ソートが完了しました！");
+                    }
+                }
+
+                renderCards(); // 各ステップの最後に必ず描画
+            }
+
+            // イベントリスナーを設定
+            nextButton.addEventListener('click', nextStep);
+            resetButton.addEventListener('click', initialize);
+
+            // 初期化
+            initialize();
+        });
+    </script>
+</body>
+</html>
