@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>クイックソート ビジュアライザー (情報I)</title>
+    <!-- Tailwind CSSの読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Interフォントを適用 */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        /* カードの基本スタイル */
+        .card-element {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 50px;
+            height: 50px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            background-color: #ffffff;
+            border: 2px solid #e5e7eb;
+        }
+        /* ハイライトの色定義 */
+        .highlight-pivot {
+            background-color: #fca5a5; /* 赤系 */
+            border-color: #ef4444;
+            color: #7f1d1d;
+        }
+        .highlight-c {
+            background-color: #93c5fd; /* 青系 */
+            border-color: #3b82f6;
+            color: #1e3a8a;
+        }
+        .highlight-i {
+            background-color: #a7f3d0; /* 緑系 */
+            border-color: #10b981;
+            color: #064e3b;
+        }
+        .highlight-sorted {
+            background-color: #d1d5db; /* 確定要素 */
+            border-color: #9ca3af;
+            color: #374151;
+        }
+        .highlight-swapped {
+            animation: swap-animation 0.5s ease-in-out;
+        }
+        @keyframes swap-animation {
+            0% { transform: scale(1); box-shadow: 0 0 10px rgba(251, 191, 36, 0.8); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="p-6">
+
+    <div class="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
+        <h1 class="text-3xl font-bold mb-4 text-gray-800">情報I クイックソート ビジュアライザー</h1>
+        <p class="mb-6 text-gray-600">
+            このツールを使って、クイックソートの「パーティション」の仕組みをステップごとに確認しましょう。再帰呼び出しの処理の流れも掴めます。
+        </p>
+
+        <!-- 現在の状態と解説エリア -->
+        <div id="explanation-area" class="bg-indigo-50 border-l-4 border-indigo-500 p-4 mb-6 rounded-lg">
+            <p id="current-step-text" class="text-indigo-800 font-medium">「開始」ボタンを押してソートを始めましょう。</p>
+            <p id="current-recursion-text" class="text-sm text-indigo-600 mt-1"></p>
+        </div>
+
+        <!-- 配列の表示エリア -->
+        <div id="array-container" class="flex flex-wrap justify-center gap-2 p-4 bg-gray-100 rounded-lg mb-6 shadow-inner min-h-[80px] items-center">
+            <!-- カード要素はJavaScriptによってここに挿入されます -->
+        </div>
+
+        <!-- コントロールボタン -->
+        <div class="flex flex-wrap gap-4 justify-center">
+            <button id="start-reset-button" class="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-150">
+                開始 / リセット
+            </button>
+            <button id="next-step-button" class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150" disabled>
+                次のステップへ
+            </button>
+        </div>
+
+        <!-- 凡例 -->
+        <div class="mt-8 pt-4 border-t border-gray-200">
+            <h3 class="text-lg font-semibold mb-3 text-gray-700">凡例 (カードの色と役割)</h3>
+            <div class="flex flex-wrap gap-6 text-sm">
+                <div class="flex items-center gap-2">
+                    <span class="card-element highlight-pivot w-6 h-6 text-xs flex-shrink-0">P</span>
+                    <span>ピボット (Pivot, 基準値)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="card-element highlight-c w-6 h-6 text-xs flex-shrink-0">C</span>
+                    <span>交換位置 (C) / ピボットより小さい要素の区切り</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="card-element highlight-i w-6 h-6 text-xs flex-shrink-0">I</span>
+                    <span>比較中の要素 (i)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="card-element bg-white border-gray-400 w-6 h-6 text-xs flex-shrink-0"></span>
+                    <span>現在の範囲内の要素</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="card-element highlight-sorted w-6 h-6 text-xs flex-shrink-0"></span>
+                    <span>範囲外 / 確定した要素</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // グローバル変数
+        // 実行環境での再宣言エラーを回避するため、letをvarに変更しました
+        var A_INITIAL = [72, 16, 57, 10, 88, 43, 99, 45];
+        var A = [];
+        var N;
+        
+        // 再帰呼び出しのスタックを模倣するスタック: {h: number, m: number, done: boolean}
+        let callStack = []; 
+
+        // DOM要素
+        const arrayContainer = document.getElementById('array-container');
+        const startResetButton = document.getElementById('start-reset-button');
+        const nextStepButton = document.getElementById('next-step-button');
+        const stepText = document.getElementById('current-step-text');
+        const recursionText = document.getElementById('current-recursion-text');
+
+        // ステップ実行のためのジェネレータ
+        let quicksortGenerator;
+
+        /**
+         * 初期状態に戻す
+         */
+        function reset() {
+            A = [...A_INITIAL];
+            N = A.length;
+            callStack = [{ h: 0, m: N - 1, step: 'INIT' }]; // 初期呼び出しをスタックに入れる
+            quicksortGenerator = quicksortStepGenerator(); // ジェネレータを再作成
+            
+            // UIの初期化
+            drawArray();
+            stepText.textContent = '「次のステップへ」ボタンを押して、ソートの実行を開始してください。';
+            recursionText.textContent = `初期コール: quick(0, ${N - 1})`;
+            nextStepButton.disabled = false;
+            startResetButton.textContent = 'リセット';
+            startResetButton.classList.remove('bg-red-600', 'hover:bg-red-700');
+            startResetButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
+        }
+
+        /**
+         * 配列の表示を更新する
+         * @param {number} h - 現在の範囲の開始インデックス
+         * @param {number} m - 現在の範囲の終了インデックス
+         * @param {number | null} pivotIndex - ピボットインデックス
+         * @param {number | null} cIndex - 交換位置 c のインデックス
+         * @param {number | null} iIndex - 比較対象 i のインデックス
+         * @param {number[] | null} swappedIndices - 直前に交換された要素のインデックス [idx1, idx2]
+         */
+        function drawArray(h = 0, m = -1, pivotIndex = null, cIndex = null, iIndex = null, swappedIndices = null) {
+            arrayContainer.innerHTML = '';
+            
+            // m が -1 の場合は配列全体を表示（初期状態や完了時）
+            if (m === -1) m = N - 1;
+
+            A.forEach((value, index) => {
+                const card = document.createElement('div');
+                card.textContent = value;
+                card.classList.add('card-element');
+                card.style.order = index; // Flexboxの順序をインデックスに設定
+
+                // スタイルの適用
+                // デフォルトのTailwindクラスを設定 (アクティブ範囲内の非ハイライト要素用)
+                let highlightClass = 'bg-white border-gray-400';
+                
+                if (index < h || index > m) {
+                    // 現在の処理範囲外
+                    highlightClass = 'highlight-sorted';
+                } else {
+                    // 現在の処理範囲内
+                    if (index === pivotIndex) {
+                        highlightClass = 'highlight-pivot';
+                    } else if (index === cIndex) {
+                        highlightClass = 'highlight-c';
+                    } else if (index === iIndex) {
+                        highlightClass = 'highlight-i';
+                    } 
+                    // else: highlightClass は 'bg-white border-gray-400' のまま
+                }
+                
+                // highlightClass が複数クラス（スペース区切り）を含む可能性があるため、分割して追加する
+                highlightClass.split(' ').forEach(cls => {
+                    if (cls) card.classList.add(cls);
+                });
+
+                // 交換アニメーションは、他のハイライトとは独立して適用します。
+                if (swappedIndices && (index === swappedIndices[0] || index === swappedIndices[1])) {
+                    card.classList.add('highlight-swapped');
+                }
+
+                // インデックスの表示
+                const indexLabel = document.createElement('span');
+                indexLabel.textContent = index;
+                indexLabel.classList.add('absolute', '-bottom-5', 'text-xs', 'text-gray-500');
+                card.appendChild(indexLabel);
+
+                arrayContainer.appendChild(card);
+            });
+        }
+
+        /**
+         * クイックソートのステップ実行ロジック (ジェネレータ関数)
+         */
+        function* quicksortStepGenerator() {
+            while (callStack.length > 0) {
+                // 1. 修正: キュー (shift()) からスタック (pop()) に変更し、深さ優先を実現
+                const { h, m, step } = callStack.pop(); 
+
+                // 1. 範囲チェック（再帰のベースケース）
+                if (h >= m) {
+                    stepText.textContent = `[quick(${h}, ${m})] 終了: h >= m のため、この範囲でのソートは完了です。`;
+                    recursionText.textContent = `範囲 [${h}, ${m}] は確定しました。次の範囲へ移ります。`;
+                    drawArray(h, m, null, null, null, null);
+                    yield; // 終了ステップで一時停止
+                    continue;
+                }
+
+                let p = A[m]; // ピボット (右端の要素)
+                let c = h;    // 交換位置 c
+                let pivotIndex = m;
+
+                // 2. ピボット選択と c の初期化
+                stepText.textContent = `[quick(${h}, ${m})] 開始: ピボットを右端の要素 ${p} に決定しました。交換位置 c を ${h} に初期化します。`;
+                recursionText.textContent = `現在の処理範囲: ${h} 〜 ${m} | ピボット: ${p}`;
+                drawArray(h, m, pivotIndex, c, null);
+                yield;
+
+                // 3. パーティション処理 (ループ)
+                let swapped = false;
+                for (let i = h; i < m; i++) {
+                    let iIndex = i;
+                    
+                    // 3a. 比較
+                    stepText.textContent = `比較 (i=${iIndex}): 要素 ${A[iIndex]} と ピボット ${p} を比較します。`;
+                    drawArray(h, m, pivotIndex, c, iIndex);
+                    yield;
+
+                    if (A[i] < p) {
+                        // 3b. 交換 (A[i] < p の場合)
+                        stepText.textContent = `交換 (i=${iIndex}, c=${c}): ${A[i]} < ${p} なので、A[${iIndex}] と A[${c}] を交換します。その後、交換位置 c を ${c+1} に進めます。`;
+                        
+                        // 交換実行
+                        [A[i], A[c]] = [A[c], A[i]];
+                        swapped = true;
+                        
+                        // 交換後の描画
+                        drawArray(h, m, pivotIndex, c, iIndex, [i, c]); 
+                        yield; 
+
+                        c++; // c を進める
+                        
+                        // 交換後の c の更新と次のステップへの準備
+                        stepText.textContent = `次の比較へ: c が ${c} に進みました。次の要素を比較します。`;
+                        drawArray(h, m, pivotIndex, c, null);
+                        yield;
+                        swapped = false; // 交換フラグをリセット
+
+                    } else {
+                        // 3c. 交換なし
+                        stepText.textContent = `交換なし (i=${iIndex}): ${A[i]} >= ${p} なので、交換は行いません。次の要素へ進みます。`;
+                        drawArray(h, m, pivotIndex, c, iIndex);
+                        yield;
+                    }
+                }
+
+                // 4. ピボットを最終位置 c に配置
+                let finalPivotPos = c;
+                stepText.textContent = `パーティション完了: ループが終了しました。ピボット ${p} を交換位置 c (インデックス ${finalPivotPos}) と交換し、確定させます。`;
+                
+                // ピボット交換実行
+                [A[m], A[finalPivotPos]] = [A[finalPivotPos], A[m]];
+                
+                drawArray(h, m, finalPivotPos, finalPivotPos, null, [m, finalPivotPos]);
+                yield;
+
+                stepText.textContent = `パーティション確定: ピボット ${p} はインデックス ${finalPivotPos} に確定しました。この位置より左側は ${p} より小さく、右側は ${p} より大きい要素になりました。`;
+                recursionText.textContent = `再帰呼び出しをスタックに追加: quick(${h}, ${finalPivotPos - 1}) (左側) と quick(${finalPivotPos + 1}, ${m}) (右側) に分割します。`;
+                drawArray(h, m, finalPivotPos, null, null);
+                
+                // 5. 再帰呼び出しをスタックに追加 (LIFO, 左側優先)
+                // 左側 (quick(h, c-1)) を先に処理するため、
+                // スタックの底に右側をプッシュし、スタックのトップに左側をプッシュします。
+                
+                // 1. 右側を先にスタックに追加 (次に処理される左側の下になる)
+                if (finalPivotPos + 1 <= m) {
+                    callStack.push({ h: finalPivotPos + 1, m: m, step: 'RECURSE_RIGHT' }); 
+                }
+                // 2. 左側を後にスタックに追加 (これが pop() で最初に取り出され、深さ優先で処理される)
+                if (h <= finalPivotPos - 1) {
+                    callStack.push({ h: h, m: finalPivotPos - 1, step: 'RECURSE_LEFT' }); 
+                }
+                
+                yield; // 再帰呼び出し前で一時停止
+            }
+            
+            // 6. ソート完了
+            stepText.textContent = '【ソート完了】: すべての要素が正しい位置に配置されました！クイックソートの処理はこれで全て終了です。';
+            recursionText.textContent = '';
+            drawArray(0, N - 1, null, null, null); // 全て確定色で表示
+            nextStepButton.disabled = true;
+            startResetButton.textContent = 'もう一度開始';
+            startResetButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+            startResetButton.classList.add('bg-red-600', 'hover:bg-red-700');
+        }
+
+        /**
+         * 「次のステップへ」ボタンのクリックハンドラ
+         */
+        function handleNextStep() {
+            if (quicksortGenerator) {
+                const { done } = quicksortGenerator.next();
+                if (done) {
+                    nextStepButton.disabled = true;
+                }
+            }
+        }
+
+        // イベントリスナーの設定
+        startResetButton.addEventListener('click', () => {
+            if (startResetButton.textContent === '開始 / リセット' || startResetButton.textContent === 'もう一度開始') {
+                reset();
+                // 最初のステップを自動実行
+                handleNextStep(); 
+            } else {
+                // リセット処理
+                reset();
+                startResetButton.textContent = '開始 / リセット';
+            }
+        });
+
+        nextStepButton.addEventListener('click', handleNextStep);
+
+        // 初回描画
+        drawArray(0, N-1);
+        
+    </script>
+</body>
+</html>

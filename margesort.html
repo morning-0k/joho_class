@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マージソート ビジュアライザー (情報I)</title>
+    <!-- Tailwind CSSの読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Interフォントを適用 */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        /* カードの基本スタイル */
+        .card-element {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 50px;
+            height: 50px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            background-color: #ffffff;
+            border: 2px solid #e5e7eb;
+        }
+        /* ハイライトの色定義（マージソート用に再定義） */
+        /* i: 左側のポインタ */
+        .highlight-i { 
+            background-color: #a7f3d0; /* 緑系 */
+            border-color: #10b981;
+            color: #064e3b;
+        }
+        /* j: 右側のポインタ */
+        .highlight-j { 
+            background-color: #93c5fd; /* 青系 */
+            border-color: #3b82f6;
+            color: #1e3a8a;
+        }
+        /* TEMP: 一時配列にコピーされた要素 */
+        .highlight-temp {
+            background-color: #fca5a5; /* 赤系 */
+            border-color: #ef4444;
+            color: #7f1d1d;
+        }
+        /* 確定要素 */
+        .highlight-sorted {
+            background-color: #d1d5db; 
+            border-color: #9ca3af;
+            color: #374151;
+        }
+        /* マージ後の要素 */
+        .highlight-merged {
+            background-color: #e0f2fe; /* 明るい青 */
+            border-color: #0c4a6e;
+            color: #0c4a6e;
+        }
+        .highlight-swapped {
+            animation: swap-animation 0.5s ease-in-out;
+        }
+        @keyframes swap-animation {
+            0% { transform: scale(1); box-shadow: 0 0 10px rgba(59, 130, 246, 0.8); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="p-6">
+
+    <div class="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
+        <h1 class="text-3xl font-bold mb-4 text-gray-800">情報I マージソート ビジュアライザー</h1>
+        <p class="mb-6 text-gray-600">
+            マージソートの「分割」と「結合（マージ）」の仕組みをステップごとに確認できます。左側を優先的に処理する深さ優先の順序で実行されます。
+        </p>
+
+        <!-- 現在の状態と解説エリア -->
+        <div id="explanation-area" class="bg-indigo-50 border-l-4 border-indigo-500 p-4 mb-6 rounded-lg">
+            <p id="current-step-text" class="text-indigo-800 font-medium">「開始」ボタンを押してソートを始めましょう。</p>
+            <p id="current-recursion-text" class="text-sm text-indigo-600 mt-1"></p>
+        </div>
+
+        <!-- 配列の表示エリア -->
+        <div id="array-container" class="flex flex-wrap justify-center gap-2 p-4 bg-gray-100 rounded-lg mb-6 shadow-inner min-h-[80px] items-center">
+            <!-- カード要素はJavaScriptによってここに挿入されます -->
+        </div>
+
+        <!-- 一時配列の表示エリア -->
+        <div class="mt-4">
+            <h3 class="text-lg font-semibold text-gray-700">一時配列 (Temp Array)</h3>
+            <div id="temp-array-container" class="flex flex-wrap justify-center gap-2 p-2 bg-yellow-50 rounded-lg border border-yellow-200 min-h-[50px] items-center text-sm text-gray-500">
+                <!-- 一時配列の要素はJavaScriptによってここに挿入されます -->
+            </div>
+        </div>
+
+        <!-- コントロールボタン -->
+        <div class="flex flex-wrap gap-4 justify-center mt-6">
+            <button id="start-reset-button" class="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-150">
+                開始 / リセット
+            </button>
+            <button id="next-step-button" class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150" disabled>
+                次のステップへ
+            </button>
+        </div>
+
+        <!-- 凡例 -->
+        <div class="mt-8 pt-4 border-t border-gray-200">
+            <h3 class="text-lg font-semibold mb-3 text-gray-700">凡例 (カードの色と役割)</h3>
+            <div class="flex flex-wrap gap-6 text-sm">
+                <div class="flex items-center gap-2">
+                    <span class="card-element highlight-i w-6 h-6 text-xs flex-shrink-0">i</span>
+                    <span>左側ポインタ (i)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="card-element highlight-j w-6 h-6 text-xs flex-shrink-0">j</span>
+                    <span>右側ポインタ (j)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="card-element highlight-temp w-6 h-6 text-xs flex-shrink-0">T</span>
+                    <span>一時配列にコピーされた要素</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="card-element highlight-merged w-6 h-6 text-xs flex-shrink-0"></span>
+                    <span>マージ処理完了範囲</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="card-element highlight-sorted w-6 h-6 text-xs flex-shrink-0"></span>
+                    <span>範囲外 / 確定済み要素</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // グローバル変数
+        var A_INITIAL = [72, 16, 57, 10, 88, 43, 99, 45];
+        var A = [];
+        var N;
+        
+        // 再帰呼び出しのスタックを模倣する配列（深さ優先のためLIFO）
+        let callStack = []; 
+        let tempArray = [];
+
+        // DOM要素
+        const arrayContainer = document.getElementById('array-container');
+        const tempArrayContainer = document.getElementById('temp-array-container');
+        const startResetButton = document.getElementById('start-reset-button');
+        const nextStepButton = document.getElementById('next-step-button');
+        const stepText = document.getElementById('current-step-text');
+        const recursionText = document.getElementById('current-recursion-text');
+
+        // ステップ実行のためのジェネレータ
+        let mergesortGenerator;
+
+        /**
+         * 初期状態に戻す
+         */
+        function reset() {
+            A = [...A_INITIAL];
+            N = A.length;
+            // 初期呼び出しをスタックに入れる
+            callStack = [{ h: 0, m: N - 1, step: 'DIVIDE' }]; 
+            mergesortGenerator = mergesortStepGenerator(); 
+            tempArray = [];
+            
+            // UIの初期化
+            drawArray();
+            drawTempArray();
+            stepText.textContent = '「次のステップへ」ボタンを押して、ソートの実行を開始してください。';
+            recursionText.textContent = `初期コール: merge_sort(0, ${N - 1})`;
+            nextStepButton.disabled = false;
+            startResetButton.textContent = 'リセット';
+            startResetButton.classList.remove('bg-red-600', 'hover:bg-red-700');
+            startResetButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
+        }
+
+        /**
+         * メイン配列の表示を更新する
+         * @param {number} h - 現在の範囲の開始インデックス
+         * @param {number} m - 現在の範囲の終了インデックス
+         * @param {number | null} iIndex - 左側のポインタ i
+         * @param {number | null} jIndex - 右側のポインタ j
+         * @param {string} state - 現在の状態 ('DIVIDE', 'MERGE', 'COMPARE', 'COPY_BACK')
+         */
+        function drawArray(h = 0, m = -1, iIndex = null, jIndex = null, state = 'DEFAULT') {
+            arrayContainer.innerHTML = '';
+            
+            if (m === -1) m = N - 1;
+
+            A.forEach((value, index) => {
+                const card = document.createElement('div');
+                card.textContent = value;
+                card.classList.add('card-element');
+                card.style.order = index;
+
+                let highlightClass = 'bg-white border-gray-400';
+                
+                if (index < h || index > m) {
+                    // 処理範囲外または既にマージ完了した大きな範囲
+                    if (state === 'COMPLETED' || state === 'COPY_BACK_INIT') {
+                        // ソート完了時はすべて確定色
+                        highlightClass = 'highlight-sorted';
+                    } else {
+                        // 処理中は、範囲外の要素を確定色で表示
+                        highlightClass = 'highlight-sorted';
+                    }
+                } else {
+                    // 処理範囲内
+                    if (state === 'COMPARE' || state === 'COPY_TEMP') {
+                        // ポインタ i, j のハイライト
+                        if (index === iIndex) {
+                            highlightClass = 'highlight-i';
+                        } else if (index === jIndex) {
+                            highlightClass = 'highlight-j';
+                        } else if (index < iIndex && index < jIndex && index >= h) {
+                            // 既に一時配列にコピーされた要素を強調
+                            highlightClass = 'highlight-temp';
+                        } else if (state === 'COPY_TEMP' && (index === iIndex || index === jIndex)) {
+                             // コピーされた要素を強調（一時的に）
+                             highlightClass = 'highlight-temp highlight-swapped';
+                        }
+                    } else if (state === 'MERGE_DONE' || state === 'MERGE_INIT') {
+                        // マージ処理中の範囲を強調 (分割後の単一要素も含む)
+                        highlightClass = 'highlight-merged';
+                    } else if (state === 'COPY_BACK_ELEMENT' && index === iIndex) {
+                        // コピーバック中の要素
+                        highlightClass = 'highlight-temp highlight-swapped';
+                    }
+                }
+                
+                highlightClass.split(' ').forEach(cls => {
+                    if (cls) card.classList.add(cls);
+                });
+
+                // インデックスの表示
+                const indexLabel = document.createElement('span');
+                indexLabel.textContent = index;
+                indexLabel.classList.add('absolute', '-bottom-5', 'text-xs', 'text-gray-500');
+                card.appendChild(indexLabel);
+
+                arrayContainer.appendChild(card);
+            });
+        }
+
+        /**
+         * 一時配列の表示を更新する
+         */
+        function drawTempArray() {
+            tempArrayContainer.innerHTML = '';
+            if (tempArray.length === 0) {
+                tempArrayContainer.textContent = '（空）';
+                return;
+            }
+
+            tempArray.forEach((value, index) => {
+                const card = document.createElement('div');
+                card.textContent = value;
+                card.classList.add('card-element', 'bg-yellow-100', 'text-gray-800', 'w-10', 'h-10', 'text-base');
+                card.style.order = index;
+
+                const indexLabel = document.createElement('span');
+                indexLabel.textContent = index;
+                indexLabel.classList.add('absolute', '-bottom-5', 'text-xs', 'text-gray-500');
+                card.appendChild(indexLabel);
+
+                tempArrayContainer.appendChild(card);
+            });
+        }
+        
+        /**
+         * マージ操作をステップ実行するジェネレータ
+         * @param {number} h - 開始インデックス
+         * @param {number} mid - 中央インデックス
+         * @param {number} m - 終了インデックス
+         */
+        function* mergeHalves(h, mid, m) {
+            stepText.textContent = `[MERGE INIT] 範囲 (${h}, ${mid}) と (${mid + 1}, ${m}) のマージを開始します。`;
+            recursionText.textContent = `マージ中の範囲: ${h} 〜 ${m}`;
+            drawArray(h, m, null, null, 'MERGE_INIT'); 
+            drawTempArray();
+            yield;
+
+            let i = h;
+            let j = mid + 1;
+            let k = 0;
+            tempArray = []; 
+
+            // マージ処理 (比較と一時配列へのコピー)
+            while (i <= mid && j <= m) {
+                stepText.textContent = `[MERGE COMPARE] ${A[i]} (左) と ${A[j]} (右) を比較中...`;
+                drawArray(h, m, i, j, 'COMPARE');
+                drawTempArray();
+                yield;
+
+                let selectedValue;
+                
+                if (A[i] <= A[j]) {
+                    selectedValue = A[i];
+                    i++;
+                } else {
+                    selectedValue = A[j];
+                    j++;
+                }
+                
+                tempArray[k] = selectedValue;
+                k++;
+
+                stepText.textContent = `[MERGE COPY] ${selectedValue} を一時配列に追加しました。`;
+                drawArray(h, m, i, j, 'COPY_TEMP'); 
+                drawTempArray();
+                yield;
+            }
+
+            // 残りの要素をコピー (左側)
+            while (i <= mid) {
+                stepText.textContent = `[MERGE REMAINDER] 左側残りの ${A[i]} を一時配列にコピー中...`;
+                tempArray[k] = A[i];
+                drawArray(h, m, i, j, 'COPY_TEMP'); 
+                drawTempArray();
+                yield;
+                i++;
+                k++;
+            }
+
+            // 残りの要素をコピー (右側)
+            while (j <= m) {
+                stepText.textContent = `[MERGE REMAINDER] 右側残りの ${A[j]} を一時配列にコピー中...`;
+                tempArray[k] = A[j];
+                drawArray(h, m, i, j, 'COPY_TEMP'); 
+                drawTempArray();
+                yield;
+                j++;
+                k++;
+            }
+
+            // 元の配列への書き戻し
+            stepText.textContent = `[MERGE FINALIZE] 一時配列 (Temp Array) から元の配列 (${h} から ${m}) に要素を書き戻します。`;
+            drawArray(h, m, null, null, 'COPY_BACK_INIT');
+            drawTempArray();
+            yield; 
+
+            for (k = 0; k < tempArray.length; k++) {
+                A[h + k] = tempArray[k];
+                stepText.textContent = `[MERGE FINALIZE] ${tempArray[k]} を A[${h + k}] に書き込みました。`;
+                drawArray(h, m, h + k, null, 'COPY_BACK_ELEMENT'); 
+                yield;
+            }
+
+            tempArray = []; // 一時配列をクリア
+            stepText.textContent = `[MERGE DONE] 範囲 (${h}, ${m}) のマージが完了しました。この範囲はソート済みです。`;
+            drawArray(h, m, null, null, 'MERGE_DONE');
+            drawTempArray();
+            yield;
+        }
+
+        /**
+         * マージソートのステップ実行ロジック (ジェネレータ関数)
+         */
+        function* mergesortStepGenerator() {
+            while (callStack.length > 0) {
+                // スタック (LIFO) からジョブを取り出す
+                let job = callStack.pop(); 
+                const { h, m } = job;
+
+                if (job.step === 'DIVIDE') {
+                    if (h >= m) {
+                        stepText.textContent = `[DIVIDE] 範囲 (${h}, ${m}) は単一要素なので、すぐにマージの準備に移ります。`;
+                        drawArray(h, m, null, null, 'MERGE_INIT'); 
+                        yield;
+                        continue;
+                    }
+
+                    const mid = Math.floor((h + m) / 2);
+                    stepText.textContent = `[DIVIDE] 範囲 (${h}, ${m}) を中央 ${mid} で2つに分割します。`;
+                    recursionText.textContent = `次の処理: (左側) merge_sort(${h}, ${mid}) -> (右側) merge_sort(${mid + 1}, ${m}) -> (結合) merge(${h}, ${m})`;
+                    drawArray(h, m, mid, mid + 1, 'DIVIDE');
+                    yield;
+
+                    // 1. MERGE ジョブを最初にプッシュ (深さ優先で分割が完了した後、最後に実行されるように)
+                    callStack.push({ h: h, m: m, mid: mid, step: 'MERGE' });
+
+                    // 2. 右側をプッシュ
+                    callStack.push({ h: mid + 1, m: m, step: 'DIVIDE' });
+
+                    // 3. 左側を最後にプッシュ (LIFOにより、これが最初に pop() され、左側の深さ優先処理が始まる)
+                    callStack.push({ h: h, m: mid, step: 'DIVIDE' });
+                    
+                    yield;
+
+                } else if (job.step === 'MERGE') {
+                    // MERGE フェーズの実行
+                    yield* mergeHalves(h, job.mid, m); 
+                }
+            }
+            
+            // 6. ソート完了
+            stepText.textContent = '【ソート完了】: すべての要素がマージされ、ソートが完了しました！';
+            recursionText.textContent = '';
+            drawArray(0, N - 1, null, null, 'COMPLETED'); // 全て確定色で表示
+            nextStepButton.disabled = true;
+            startResetButton.textContent = 'もう一度開始';
+            startResetButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+            startResetButton.classList.add('bg-red-600', 'hover:bg-red-700');
+        }
+
+        /**
+         * 「次のステップへ」ボタンのクリックハンドラ
+         */
+        function handleNextStep() {
+            if (mergesortGenerator) {
+                const { done } = mergesortGenerator.next();
+                if (done) {
+                    nextStepButton.disabled = true;
+                }
+            }
+        }
+
+        // イベントリスナーの設定
+        startResetButton.addEventListener('click', () => {
+            if (startResetButton.textContent === '開始 / リセット' || startResetButton.textContent === 'もう一度開始') {
+                reset();
+                // 最初のステップを自動実行
+                handleNextStep(); 
+            } else {
+                // リセット処理
+                reset();
+                startResetButton.textContent = '開始 / リセット';
+            }
+        });
+
+        nextStepButton.addEventListener('click', handleNextStep);
+
+        // 初回描画
+        reset(); // マージソートでは、リセット後に自動で最初のステップ実行まで進める
+        
+    </script>
+</body>
+</html>
